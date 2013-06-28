@@ -822,7 +822,7 @@ class Game
     @votingPeriod = 0
     @roundNumber = 0
     @readMode = 0 # 0: bot reads answers; 1: czar reads answers (use when using Skype voice)
-    @voteMode = 0 # 0: channel votes; 1: czar votes
+    @voteMode = 1 # 0: channel votes; 1: czar votes. 0 not implemented yet.
     @czarOrder = []
     @czarIndex = 0
     @czar = 0
@@ -869,12 +869,12 @@ class Game
         @fillHand(player)
         @sendHand(player)
       gameStarted = 1
-      @czar = @chooseCzar()
       @playQuestion(msg)
       
   playQuestion: (msg) ->
     @votingPeriod = 0
     @currentAnswer = 0
+    @czar = @chooseCzar()
     @roundNumber++
     @playersToSubmit = []
     @submissions = []
@@ -885,7 +885,6 @@ class Game
     @submissionPeriod = 1
     for player in @players
       @playersToSubmit.push player
-    console.log "Question cards remaining: " + @questionIDPool.length
     
   submitCard: (msg) ->
     for player in @players
@@ -922,15 +921,38 @@ class Game
       @startVoting()
     else
       if @readMode is 0 # bot reads
-        @msg.send (@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]['submission']
+        for s in @randomizedSubmissions
+          @msg.send (@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]['submission']
+          @currentAnswer++
+          console.log "@currentAnswer: " + @currentAnswer
       else if @readMode is 1 # bot sends to czar
-        # send randomized submissions
-        @robot.send({user: {name: @czar.name}}, @randomizedSubmissions[@currentAnswer]['submission'])
-      @currentAnswer++
+        for s in @randomizedSubmissions
+          @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]['submission']))
+          @currentAnswer++
+          console.log "@currentAnswer: " + @currentAnswer
+          
+      if @currentAnswer >= @randomizedSubmissions.length # duplicate code
+        console.log "second time @currentAnswer >= @randomizedSubmissions.length"
+        @currentAnswer = 0
+        @startVoting()
 
   startVoting: ->
-    #
+    if @voteMode is 0 # channel votes
+      # TODO: not implemented. Should this mode be available?
+      @msg.send "Voting time! Type \"!card vote #\" where # is the number prefixing the submission you want to vote for."
+    else if @voteMode is 1 # czar votes
+      @msg.send "The czar " + @czar.name + " is now voting."
+      @robot.send({user: {name: @czar.name}}, "Voting time! Type \"vote #\" where # is the number prefixing the submission you want to vote for.")
   
+  submitVote: (msg) ->
+    if @voteMode is 0 # channel votes, not implemented
+      1
+      # implement voteForCard()
+    else if @voteMode is 1 # czar votes
+      @msg.send "This round's winner is " + @randomizedSubmissions[msg.match[1]]['player'].name + " with submission " + msg.match[1] + "."
+      @randomizedSubmissions[msg.match[1]]['player'].score++
+      @playQuestion(@msg)
+
   fillHand: (player) ->
     # TODO: make function with common code from dealHand
     while player.hand.length < @maxHand
@@ -938,7 +960,6 @@ class Game
       c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
       player.hand.push c
     # TODO: show hand
-    console.log "Answer cards remaining: " + @answerIDPool.length
     
   sendHand: (player) ->
     # TODO: should we send in a single message to reduce message spam?
@@ -949,20 +970,41 @@ class Game
       
   chooseCzar: ->
     if !@czarOrder or @czarOrder.length is 0
+      console.log "@czarOrder empty"
       for player in @players
+        console.log "push player to @czarOrder"
         @czarOrder.push player # join order determines czar order
     else
+      console.log "@czarOrder not empty"
       if @czarIndex >= @czarOrder.length
+        console.log "@czarIndex >= @czarOrder.length"
         @czarIndex = 0 # back to top of list
       else
-        @czarOrder[@czarIndex++] # return czar player and set next czar
+        console.log "return @czarOrder[@czarIndex++]"
+        return @czarOrder[@czarIndex++] # return czar player and set next czar
         
     
   voteForCard: ->
     #
-    
+  
+  showScore: ->
+    scoreMsg = "Scores:"
+    for player in @players
+      scoreMsg = scoreMsg + " " + player.name + " " + player.score + ","
+    @msg.send scoreMsg
+  
   gameInfo: ->
     # show current czar, current round, questions in deck, answers in deck, player count
+    console.log "Current round: " + @roundNumber
+    console.log "Czar: " + @czar.name
+    console.log "Czar order: " + @czarOrder
+    console.log "Czar index: " + @czarIndex
+    console.log "Question cards remaining: " + @questionIDPool.length
+    console.log "Answer cards remaining: " + @answerIDPool.length
+    scoreMsg = "Scores:"
+    for player in @players
+      scoreMsg = scoreMsg + " " + player.name + " " + player.score + ","
+    console.log scoreMsg
     
 class Player
   constructor: (msg, robot) ->
@@ -971,6 +1013,7 @@ class Player
     @user = msg.message.user
     @name = msg.message.user.name
     @hand = []
+    @score = 0
     
   formatHand: ->
     displayHand = []
@@ -1004,6 +1047,12 @@ module.exports = (robot) =>
     else if msg.match[1] is "!next"
       if gameExists is 1 and g and g.votingPeriod is 1
         g.nextAnswer()
+    else if msg.match[1] is "!card score"
+      if gameExists is 1 and g
+        g.showScore()
+    else if msg.match[1] is "!card info"
+      if gameExists is 1 and g
+        g.gameInfo()
     else if msg.match[1] is "!card help"
       showHelp(msg)
     else if msg.match[1] is "!end"
@@ -1016,6 +1065,10 @@ module.exports = (robot) =>
   robot.respond /submit (.*)/i, (msg) ->
     if gameExists is 1 and g and g.submissionPeriod is 1
       g.submitCard(msg)
+      
+  robot.respond /vote (.*)/i, (msg) ->
+    if gameExists is 1 and g and g.votingPeriod is 1
+      g.submitVote(msg)
       
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
