@@ -796,6 +796,7 @@ answers = [
   "YOU MUST CONSTRUCT ADDITIONAL PYLONS.",
   "Zeus's sexual appetites."
 ]
+g = 0
 gameExists = 0
 gameStarted = 0
 
@@ -808,9 +809,12 @@ class Game
     @questionIDPool = []
     @answerIDPool = []  
     @players = []
+    @playersToSubmit = []
     @minPlayers = 1
+    @maxHand = 3
     @discardQuestions = [] # TODO: once a question is over, discard the question here
     @discardAnswers = []
+    @submissions = []
     @roundNumber = 0
     
     for i in [0..questions.length-1]
@@ -845,7 +849,7 @@ class Game
   dealHand: (player) ->
     # TODO: deny hand if not enough cards, or recycle discard pile
     # TODO: discard pile
-    for i in [0..9]
+    for i in [0..@maxHand-1]
       r = Math.floor(Math.random() * @answerIDPool.length)
       c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
       player.hand.push c
@@ -856,8 +860,7 @@ class Game
       msg.send "Not enough players. Need a total of " + @minPlayers + " players to start."
     else
       msg.send "Game started! Sending hands via private message."
-      msg.send "Submit your answer by sending me a private message containing your card number from 1-10"
-      msg.send "Example: \"submit 3\""
+      msg.send "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\""
       for player in @players
         @dealHand(player)
         @robot.send({user: {name: player.name}}, "Your hand:")
@@ -869,11 +872,35 @@ class Game
       
   playQuestion: (msg) ->
     @roundNumber++
+    @playersToSubmit = []
     r = Math.floor(Math.random() * @questionIDPool.length)
     c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
     msg.send "Round " + @roundNumber
     msg.send c
+    for player in @players
+      @playersToSubmit.push player
     console.log "Question cards remaining: " + @questionIDPool.length
+    
+  submitCard: (msg) ->
+    for player in @players
+      if msg.message.user.name is player.name
+        # TODO: match submission to card and remove from hand, add to submissions
+        @robot.send({user: {name: player.name}}, "You submitted: " + player.hand[msg.match[1]-1])
+        break
+    for i in [0..@playersToSubmit.length-1]
+      if msg.message.user.name is @playersToSubmit[i].name
+        @playersToSubmit.splice(i, 1)
+        break
+    if @playersToSubmit.length >= 1
+      m = msg.message.user.name + " has submitted a card. Waiting for: "
+      for player in @playersToSubmit
+        m = m + player
+      msg.send m
+    else
+      @showAnswers(@msg)
+
+  showAnswers: (msg) ->
+    msg.send "All players have submitted their cards!"
     
 class Player
   constructor: (msg, robot) ->
@@ -893,7 +920,7 @@ module.exports = (robot) =>
   robot.hear /(.*)/i, (msg) ->
     if msg.match[1] is "!card game"
       if gameExists is 0 or !gameExists
-        @g = new Game(msg, robot)
+        g = new Game(msg, robot)
         gameExists = 1
       else if gameExists is 1
         msg.send "A game is already in progress. Say \"!card help\" to see available commands."
@@ -903,24 +930,27 @@ module.exports = (robot) =>
       else if gameStarted is 1
         msg.send "A game is already in progress."
       else if gameExists is 1
-        @g.joinPlayer(msg)
+        g.joinPlayer(msg)
     else if msg.match[1] is "!card start"
       if gameExists is 0 or !gameExists
         msg.send "No game in progress to start. Say \"!card game\" to set up a game."
       else if gameStarted is 1
         msg.send "A game is already in progress."      
       else if gameExists is 1
-        @g.startGame(msg)
+        g.startGame(msg)
         gameStarted = 1
     else if msg.match[1] is "!card help"
       showHelp(msg)
     else if msg.match[1] is "!end"
       if gameExists is 1
-        @g = 0
+        g = 0
         gameExists = 0
         gameStarted = 0
         msg.send "Game ended."
         
+  robot.respond /submit (.*)/i, (msg) ->
+    if gameExists is 1
+      g.submitCard(msg)        
       
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
