@@ -816,6 +816,8 @@ class Game
     @discardAnswers = []
     @submissions = []
     @roundNumber = 0
+    @readMode = 0 # 0: bot reads answers; 1: czar reads answers (use when using Skype voice)
+    @voteMode = 1 # 0: channel votes; 1: czar votes
     # TODO: card czar
     
     for i in [0..questions.length-1]
@@ -847,15 +849,6 @@ class Game
         reply = reply + " " + player.name
       msg.send reply
     
-  dealHand: (player) ->
-    # TODO: deny hand if not enough cards, or recycle discard pile
-    # TODO: discard pile
-    for i in [0..@maxHand-1]
-      r = Math.floor(Math.random() * @answerIDPool.length)
-      c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
-      player.hand.push c
-    console.log "Answer cards remaining: " + @answerIDPool.length
-    
   startGame: (msg) ->
     if @players.length < @minPlayers
       msg.send "Not enough players. Need a total of " + @minPlayers + " players to start."
@@ -863,11 +856,8 @@ class Game
       msg.send "Game started! Sending hands via private message."
       msg.send "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\""
       for player in @players
-        @dealHand(player)
-        @robot.send({user: {name: player.name}}, "Your hand:")
-        hand = player.showHand(msg)
-        for card in hand
-          @robot.send({user: {name: player.name}}, card)
+        @fillHand(player)
+        @sendHand(player)
       gameStarted = 1
       @playQuestion(msg)
       
@@ -887,8 +877,9 @@ class Game
     for player in @players
       if msg.message.user.name is player.name
         @robot.send({user: {name: player.name}}, "You submitted: " + player.hand[msg.match[1]-1])
-        @submissions.push player.hand.splice(msg.match[1]-1, 1)
+        @submissions.push player.hand.splice(msg.match[1]-1, 1) # move submission from hand to submissions
         @fillHand(player)
+        @sendHand(player)
         break
     for i in [0..@playersToSubmit.length-1]
       if msg.message.user.name is @playersToSubmit[i].name
@@ -908,8 +899,20 @@ class Game
     # TODO: game modes, voice and no voice. No voice: bot sends answers to channel
     
   fillHand: (player) ->
-    @msg.send "fillHand()"
+    # TODO: make function with common code from dealHand
+    while player.hand.length < @maxHand
+      r = Math.floor(Math.random() * @answerIDPool.length)
+      c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
+      player.hand.push c
     # TODO: show hand
+    console.log "Answer cards remaining: " + @answerIDPool.length
+    
+  sendHand: (player) ->
+    # TODO: should we send in a single message to reduce message spam?
+    @robot.send({user: {name: player.name}}, "Your hand:")
+    hand = player.formatHand()
+    for card in hand
+      @robot.send({user: {name: player.name}}, card)
     
 class Player
   constructor: (msg, robot) ->
@@ -919,7 +922,7 @@ class Player
     @name = msg.message.user.name
     @hand = []
     
-  showHand: (msg) ->
+  formatHand: ->
     displayHand = []
     for i in [0..@hand.length-1]
       displayHand[i] = i+1 + ": " + @hand[i] # format hand as numbered list
