@@ -822,6 +822,7 @@ class Game
     @submissionPeriod = 0
     @votingPeriod = 0
     @roundNumber = 0
+    @lastQuestion = 0
     @readMode = 0 # 0: bot reads answers; 1: czar reads answers (use when using Skype voice)
     @voteMode = 1 # 0: channel votes; 1: czar votes. 0 not implemented yet.
     @czarOrder = []
@@ -838,7 +839,7 @@ class Game
       @answerIDPool[i] = i
     
     # Ready
-    msg.send "Welcome to Cards Against Humanity! To join the game, type \"!card join\"."
+    msg.send "Welcome to Cards Against Humanity! To join the game, say \"!card join\"."
     console.log "Total question cards: " + @questionIDPool.length
     console.log "Total answer cards: " + @answerIDPool.length
     
@@ -858,7 +859,7 @@ class Game
       reply = p.name + " has joined the game. Players:"
       for player in @players
         reply = reply + " " + player.name
-      reply = reply + ". When all players have joined, say \"!card start\""
+      reply = reply + ". When all players have joined, say \"!card start\"."
       msg.send reply
     
   startGame: (msg) ->
@@ -878,12 +879,14 @@ class Game
   playQuestion: (msg) ->
     @votingPeriod = 0
     @currentAnswer = 0
+    @lastQuestion = 0
     @czar = @chooseCzar()
     @roundNumber++
     @playersToSubmit = []
     @submissions = []
     r = Math.floor(Math.random() * @questionIDPool.length)
     c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
+    @lastQuestion = c
     msg.send "Round " + @roundNumber
     msg.send c
     @submissionPeriod = 1
@@ -914,6 +917,7 @@ class Game
     @submissionPeriod = 0
     @votingPeriod = 1
     msg.send "All players have submitted their cards! Submissions are in random order."
+    msg.send @lastQuestion
     @nextAnswer()
   
   nextAnswer: ->
