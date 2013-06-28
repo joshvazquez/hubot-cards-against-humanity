@@ -20,6 +20,7 @@
 #   0.1.0
 
 # TODO: flag on each question indicating if the bot should require 2 cards to be played or not
+# TODO: submissions should fill in the blanks when being read out if a question has blanks
 questions = [
   "_____ kid tested mother approved.",
   "_____: good to the last drop.",
@@ -815,10 +816,13 @@ class Game
     @discardQuestions = [] # TODO: once a question is over, discard the question here
     @discardAnswers = []
     @submissions = []
-    @waitingForSubmissions = 0
+    @randomizedSubmissions = []
+    @currentAnswer = 0
+    @submissionPeriod = 0
+    @votingPeriod = 0
     @roundNumber = 0
     @readMode = 0 # 0: bot reads answers; 1: czar reads answers (use when using Skype voice)
-    @voteMode = 1 # 0: channel votes; 1: czar votes
+    @voteMode = 0 # 0: channel votes; 1: czar votes
     @czarOrder = []
     @czarIndex = 0
     @czar = 0
@@ -869,6 +873,8 @@ class Game
       @playQuestion(msg)
       
   playQuestion: (msg) ->
+    @votingPeriod = 0
+    @currentAnswer = 0
     @roundNumber++
     @playersToSubmit = []
     @submissions = []
@@ -876,7 +882,7 @@ class Game
     c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
     msg.send "Round " + @roundNumber
     msg.send c
-    @waitingForSubmissions = 1
+    @submissionPeriod = 1
     for player in @players
       @playersToSubmit.push player
     console.log "Question cards remaining: " + @questionIDPool.length
@@ -902,15 +908,29 @@ class Game
       @showAnswers(@msg)
 
   showAnswers: (msg) ->
-    @waitingForSubmissions = 0
-    msg.send "All players have submitted their cards!"
-    # TODO: maybe send anonymous answers one at a time to card czar to read out if having an organized game with Skype voice
-    # TODO: game modes, voice and no voice. No voice: bot sends answers to channel
-    if @readMode is 0 # bot reads
-      0
-    else if @readMode is 1 # bot sends to czar
-      1
-    
+    @submissionPeriod = 0
+    @votingPeriod = 1
+    msg.send "All players have submitted their cards! Submissions are in random order."
+    @nextAnswer()
+  
+  nextAnswer: ->
+    @randomizedSubmissions = @submissions
+    @randomizedSubmissions.sort ->
+      0.5 - Math.random()
+    if @currentAnswer >= @randomizedSubmissions.length
+      @currentAnswer = 0
+      @startVoting()
+    else
+      if @readMode is 0 # bot reads
+        @msg.send (@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]
+      else if @readMode is 1 # bot sends to czar
+        # send randomized submissions
+        @robot.send({user: {name: @czar.name}}, @randomizedSubmissions[@currentAnswer])
+      @currentAnswer++
+
+  startVoting: ->
+    #
+  
   fillHand: (player) ->
     # TODO: make function with common code from dealHand
     while player.hand.length < @maxHand
@@ -981,6 +1001,9 @@ module.exports = (robot) =>
       else if gameExists is 1
         g.startGame(msg)
         gameStarted = 1
+    else if msg.match[1] is "!next"
+      if gameExists is 1 and g and g.votingPeriod is 1
+        g.nextAnswer()
     else if msg.match[1] is "!card help"
       showHelp(msg)
     else if msg.match[1] is "!end"
@@ -991,8 +1014,8 @@ module.exports = (robot) =>
         msg.send "Game ended."
         
   robot.respond /submit (.*)/i, (msg) ->
-    if gameExists is 1 and g and g.waitingForSubmissions is 1
-      g.submitCard(msg)        
+    if gameExists is 1 and g and g.submissionPeriod is 1
+      g.submitCard(msg)
       
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
