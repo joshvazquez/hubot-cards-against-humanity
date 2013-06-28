@@ -812,7 +812,7 @@ class Game
     @players = []
     @playersToSubmit = []
     @minPlayers = 1
-    @maxHand = 3
+    @maxHand = 10
     @discardQuestions = [] # TODO: once a question is over, discard the question here
     @discardAnswers = []
     @submissions = []
@@ -846,12 +846,13 @@ class Game
     found = 0
     for player in @players
       if msg.message.user.name is player.name
+        console.log msg.message.user.name + " tried to join but is already in the list as " + player.name
         found = 1
         break
     if found is 1
       msg.send "Player is already in the list."
     else    
-      p = new Player(@msg, @robot)
+      p = new Player(msg, @robot)
       @players.push p
       reply = p.name + " has joined the game. Players:"
       for player in @players
@@ -866,7 +867,9 @@ class Game
       msg.send "Game started! Sending hands via private message."
       msg.send "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\""
       for player in @players
+        console.log "Filling hand for " + player.name
         @fillHand(player)
+        console.log "Sending hand for " + player.name
         @sendHand(player)
       gameStarted = 1
       @playQuestion(msg)
@@ -901,7 +904,7 @@ class Game
     if @playersToSubmit.length >= 1
       m = msg.message.user.name + " has submitted a card. Waiting for: "
       for player in @playersToSubmit
-        m = m + player
+        m = m + " " + player.name
       @msg.send m
     else
       @showAnswers(@msg)
@@ -955,7 +958,6 @@ class Game
       @playQuestion(@msg)
 
   fillHand: (player) ->
-    # TODO: make function with common code from dealHand
     while player.hand.length < @maxHand
       r = Math.floor(Math.random() * @answerIDPool.length)
       c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
