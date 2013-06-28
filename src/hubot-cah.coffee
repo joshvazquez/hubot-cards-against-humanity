@@ -902,7 +902,7 @@ class Game
       m = msg.message.user.name + " has submitted a card. Waiting for: "
       for player in @playersToSubmit
         m = m + player
-      msg.send m
+      @msg.send m
     else
       @showAnswers(@msg)
 
@@ -922,12 +922,12 @@ class Game
     else
       if @readMode is 0 # bot reads
         for s in @randomizedSubmissions
-          @msg.send (@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]['submission']
+          @msg.send (@currentAnswer+1) + ": " + s['submission']
           @currentAnswer++
           console.log "@currentAnswer: " + @currentAnswer
       else if @readMode is 1 # bot sends to czar
         for s in @randomizedSubmissions
-          @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]['submission']))
+          @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['submission']))
           @currentAnswer++
           console.log "@currentAnswer: " + @currentAnswer
           
@@ -942,15 +942,16 @@ class Game
       @msg.send "Voting time! Type \"!card vote #\" where # is the number prefixing the submission you want to vote for."
     else if @voteMode is 1 # czar votes
       @msg.send "The czar " + @czar.name + " is now voting."
-      @robot.send({user: {name: @czar.name}}, "Voting time! Type \"vote #\" where # is the number prefixing the submission you want to vote for.")
+      @robot.send({user: {name: @czar.name}}, "Voting time! Type \"vote #\" where # is the number prefixing the submission you want to vote for (numbers in the channel).")
   
   submitVote: (msg) ->
     if @voteMode is 0 # channel votes, not implemented
       1
       # implement voteForCard()
     else if @voteMode is 1 # czar votes
-      @msg.send "This round's winner is " + @randomizedSubmissions[msg.match[1]]['player'].name + " with submission " + msg.match[1] + "."
-      @randomizedSubmissions[msg.match[1]]['player'].score++
+      @robot.send({user: {name: @czar.name}}, "Thanks for your vote.")
+      @msg.send "This round's winner is " + @randomizedSubmissions[msg.match[1]-1]['player'].name + " with submission " + msg.match[1] + "."
+      @randomizedSubmissions[msg.match[1]-1]['player'].score++
       @playQuestion(@msg)
 
   fillHand: (player) ->
@@ -974,13 +975,17 @@ class Game
       for player in @players
         console.log "push player to @czarOrder"
         @czarOrder.push player # join order determines czar order
+      console.log "PATH 1 return @czarOrder[@czarIndex++]"
+      return @czarOrder[@czarIndex++] # return czar player and set next czar
     else
       console.log "@czarOrder not empty"
       if @czarIndex >= @czarOrder.length
         console.log "@czarIndex >= @czarOrder.length"
         @czarIndex = 0 # back to top of list
+        console.log "PATH 2 return @czarOrder[@czarIndex++]"
+        return @czarOrder[@czarIndex++] # return czar player and set next czar
       else
-        console.log "return @czarOrder[@czarIndex++]"
+        console.log "PATH 3 return @czarOrder[@czarIndex++]"
         return @czarOrder[@czarIndex++] # return czar player and set next czar
         
     
@@ -999,6 +1004,7 @@ class Game
     console.log "Czar: " + @czar.name
     console.log "Czar order: " + @czarOrder
     console.log "Czar index: " + @czarIndex
+    console.log "@czarOrder[0]: " + @czarOrder[0]
     console.log "Question cards remaining: " + @questionIDPool.length
     console.log "Answer cards remaining: " + @answerIDPool.length
     scoreMsg = "Scores:"
@@ -1055,12 +1061,12 @@ module.exports = (robot) =>
         g.gameInfo()
     else if msg.match[1] is "!card help"
       showHelp(msg)
-    else if msg.match[1] is "!end"
+    else if msg.match[1] is "!card end"
       if gameExists is 1
         g = 0
         gameExists = 0
         gameStarted = 0
-        msg.send "Game ended."
+        msg.send "Cards ended."
         
   robot.respond /submit (.*)/i, (msg) ->
     if gameExists is 1 and g and g.submissionPeriod is 1
