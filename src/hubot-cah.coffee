@@ -797,7 +797,7 @@ answers = [
   "Zeus's sexual appetites."
 ]
 g = 0
-gameExists = 0
+gameExists = 0 # need this or can just check `if g`, `if !g`?
 gameStarted = 0
 
 class Game
@@ -815,10 +815,15 @@ class Game
     @discardQuestions = [] # TODO: once a question is over, discard the question here
     @discardAnswers = []
     @submissions = []
+    @waitingForSubmissions = 0
     @roundNumber = 0
     @readMode = 0 # 0: bot reads answers; 1: czar reads answers (use when using Skype voice)
     @voteMode = 1 # 0: channel votes; 1: czar votes
-    # TODO: card czar
+    @czarOrder = []
+    @czarIndex = 0
+    @czar = 0
+    # TODO: remove msg parameter from functions and change internal reference to @msg
+    # TODO: any referencing issues with assigning myArray2 = myArray1 and then modifying/deleting myArray1?
     
     for i in [0..questions.length-1]
       @questionIDPool[i] = i
@@ -847,6 +852,7 @@ class Game
       reply = p.name + " has joined the game. Players:"
       for player in @players
         reply = reply + " " + player.name
+      reply = reply + ". When all players have joined, say \"!card start\""
       msg.send reply
     
   startGame: (msg) ->
@@ -859,6 +865,7 @@ class Game
         @fillHand(player)
         @sendHand(player)
       gameStarted = 1
+      @czar = @chooseCzar()
       @playQuestion(msg)
       
   playQuestion: (msg) ->
@@ -869,6 +876,7 @@ class Game
     c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
     msg.send "Round " + @roundNumber
     msg.send c
+    @waitingForSubmissions = 1
     for player in @players
       @playersToSubmit.push player
     console.log "Question cards remaining: " + @questionIDPool.length
@@ -894,9 +902,14 @@ class Game
       @showAnswers(@msg)
 
   showAnswers: (msg) ->
+    @waitingForSubmissions = 0
     msg.send "All players have submitted their cards!"
     # TODO: maybe send anonymous answers one at a time to card czar to read out if having an organized game with Skype voice
     # TODO: game modes, voice and no voice. No voice: bot sends answers to channel
+    if @readMode is 0 # bot reads
+      0
+    else if @readMode is 1 # bot sends to czar
+      1
     
   fillHand: (player) ->
     # TODO: make function with common code from dealHand
@@ -913,6 +926,23 @@ class Game
     hand = player.formatHand()
     for card in hand
       @robot.send({user: {name: player.name}}, card)
+      
+  chooseCzar: ->
+    if !@czarOrder or @czarOrder.length is 0
+      for player in @players
+        @czarOrder.push player # join order determines czar order
+    else
+      if @czarIndex >= @czarOrder.length
+        @czarIndex = 0 # back to top of list
+      else
+        @czarOrder[@czarIndex++] # return czar player and set next czar
+        
+    
+  voteForCard: ->
+    #
+    
+  gameInfo: ->
+    # show current czar, current round, questions in deck, answers in deck, player count
     
 class Player
   constructor: (msg, robot) ->
@@ -961,7 +991,7 @@ module.exports = (robot) =>
         msg.send "Game ended."
         
   robot.respond /submit (.*)/i, (msg) ->
-    if gameExists is 1
+    if gameExists is 1 and g and g.waitingForSubmissions is 1
       g.submitCard(msg)        
       
 showHelp = (msg) ->
