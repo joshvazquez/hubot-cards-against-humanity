@@ -816,6 +816,7 @@ class Game
     @discardAnswers = []
     @submissions = []
     @roundNumber = 0
+    # TODO: card czar
     
     for i in [0..questions.length-1]
       @questionIDPool[i] = i
@@ -873,6 +874,7 @@ class Game
   playQuestion: (msg) ->
     @roundNumber++
     @playersToSubmit = []
+    @submissions = []
     r = Math.floor(Math.random() * @questionIDPool.length)
     c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
     msg.send "Round " + @roundNumber
@@ -884,8 +886,9 @@ class Game
   submitCard: (msg) ->
     for player in @players
       if msg.message.user.name is player.name
-        # TODO: match submission to card and remove from hand, add to submissions
         @robot.send({user: {name: player.name}}, "You submitted: " + player.hand[msg.match[1]-1])
+        @submissions.push player.hand.splice(msg.match[1]-1, 1)
+        @fillHand(player)
         break
     for i in [0..@playersToSubmit.length-1]
       if msg.message.user.name is @playersToSubmit[i].name
@@ -901,6 +904,12 @@ class Game
 
   showAnswers: (msg) ->
     msg.send "All players have submitted their cards!"
+    # TODO: maybe send anonymous answers one at a time to card czar to read out if having an organized game with Skype voice
+    # TODO: game modes, voice and no voice. No voice: bot sends answers to channel
+    
+  fillHand: (player) ->
+    @msg.send "fillHand()"
+    # TODO: show hand
     
 class Player
   constructor: (msg, robot) ->
