@@ -9,8 +9,9 @@
 #
 # Commands:
 #   !card game - request a game
-#   !card join - join a game and get a hand
+#   !card join - join a game that hasn't started yet
 #   !card start - stop waiting for players and start the game
+#   !card end - manual game end (debug only)
 #   !card help - view these commands
 #
 # Author:
