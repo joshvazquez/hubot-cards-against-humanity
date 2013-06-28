@@ -891,7 +891,7 @@ class Game
     for player in @players
       if msg.message.user.name is player.name
         @robot.send({user: {name: player.name}}, "You submitted: " + player.hand[msg.match[1]-1])
-        @submissions.push player.hand.splice(msg.match[1]-1, 1) # move submission from hand to submissions
+        @submissions.push({player: player, submission:player.hand.splice(msg.match[1]-1, 1)}) # move submission from hand to submissions
         @fillHand(player)
         @sendHand(player)
         break
@@ -922,10 +922,10 @@ class Game
       @startVoting()
     else
       if @readMode is 0 # bot reads
-        @msg.send (@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]
+        @msg.send (@currentAnswer+1) + ": " + @randomizedSubmissions[@currentAnswer]['submission']
       else if @readMode is 1 # bot sends to czar
         # send randomized submissions
-        @robot.send({user: {name: @czar.name}}, @randomizedSubmissions[@currentAnswer])
+        @robot.send({user: {name: @czar.name}}, @randomizedSubmissions[@currentAnswer]['submission'])
       @currentAnswer++
 
   startVoting: ->
