@@ -19,6 +19,7 @@
 # Version:
 #   0.1.0
 
+# TODO: flag on each question indicating if the bot should require 2 cards to be played or not
 questions = [
   "_____ kid tested mother approved.",
   "_____: good to the last drop.",
@@ -808,6 +809,9 @@ class Game
     @answerIDPool = []  
     @players = []
     @minPlayers = 1
+    @discardQuestions = [] # TODO: once a question is over, discard the question here
+    @discardAnswers = []
+    @roundNumber = 0
     
     for i in [0..questions.length-1]
       @questionIDPool[i] = i
@@ -818,6 +822,7 @@ class Game
     
     # Ready
     msg.send "Welcome to Cards Against Humanity! To join the game, type \"!card join\"."
+    console.log "Total question cards: " + @questionIDPool.length
     console.log "Total answer cards: " + @answerIDPool.length
     
     
@@ -840,7 +845,6 @@ class Game
   dealHand: (player) ->
     # TODO: deny hand if not enough cards, or recycle discard pile
     # TODO: discard pile
-    @msg.send "dealHand()"
     for i in [0..9]
       r = Math.floor(Math.random() * @answerIDPool.length)
       c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
@@ -852,6 +856,8 @@ class Game
       msg.send "Not enough players. Need a total of " + @minPlayers + " players to start."
     else
       msg.send "Game started! Sending hands via private message."
+      msg.send "Submit your answer by sending me a private message containing your card number from 1-10"
+      msg.send "Example: \"submit 3\""
       for player in @players
         @dealHand(player)
         @robot.send({user: {name: player.name}}, "Your hand:")
@@ -859,8 +865,16 @@ class Game
         for card in hand
           @robot.send({user: {name: player.name}}, card)
       gameStarted = 1
+      @playQuestion(msg)
       
-      
+  playQuestion: (msg) ->
+    @roundNumber++
+    r = Math.floor(Math.random() * @questionIDPool.length)
+    c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
+    msg.send "Round " + @roundNumber
+    msg.send c
+    console.log "Question cards remaining: " + @questionIDPool.length
+    
 class Player
   constructor: (msg, robot) ->
     @msg = msg
