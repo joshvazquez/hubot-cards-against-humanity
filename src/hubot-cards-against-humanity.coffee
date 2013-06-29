@@ -898,6 +898,8 @@ class Game
       if msg.message.user.name is player.name
         @robot.send({user: {name: player.name}}, "You submitted: " + player.hand[msg.match[1]-1])
         @submissions.push({player: player, submission:player.hand.splice(msg.match[1]-1, 1)}) # move submission from hand to submissions
+        if (msg.match[2]-1)
+          console.log "received second card"
         @fillHand(player)
         @sendHand(player)
         break
@@ -920,7 +922,7 @@ class Game
     msg.send @lastQuestion
     @nextAnswer()
   
-  nextAnswer: ->
+  nextAnswer: -> # send the next submission to the channel or czar
     @randomizedSubmissions = @submissions
     @randomizedSubmissions.sort ->
       0.5 - Math.random()
@@ -1066,9 +1068,6 @@ module.exports = (robot) =>
       else if gameExists is 1
         g.startGame(msg)
         gameStarted = 1
-    else if msg.match[1] is "!next"
-      if gameExists is 1 and g and g.votingPeriod is 1
-        g.nextAnswer()
     else if msg.match[1] is "!card score"
       if gameExists is 1 and g
         g.showScore()
@@ -1097,6 +1096,11 @@ module.exports = (robot) =>
   robot.respond /discard\s(\d+)/i, (msg) ->
     if gameExists is 1 and g and gameStarted is 1
       g.discardCard(msg)
+      
+  robot.respond /next/i, (msg) ->
+    if gameExists is 1 and g and g.votingPeriod is 1 and msg.message.user.name is g.czar.name
+      console.log "czar called next answer"
+      g.nextAnswer()
       
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
