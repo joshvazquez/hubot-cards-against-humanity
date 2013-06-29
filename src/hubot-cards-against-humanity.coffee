@@ -995,7 +995,16 @@ class Game
         console.log "PATH 3 return @czarOrder[@czarIndex++]"
         return @czarOrder[@czarIndex++] # return czar player and set next czar
         
-    
+  discardCard: (msg) ->
+    for player in @players
+      if msg.message.user.name is player.name
+        msg.send "Card discarded."
+        @msg.send msg.message.user.name + " just revealed to me in confidence that he or she doesn't know the meaning of the card: " + player.hand[msg.match[1]-1] + " Don't worry " + msg.message.user.name + ", your secret's safe with me."
+        player.hand.splice(msg.match[1]-1, 1) # remove card from hand
+        @fillHand(player)
+        @sendHand(player)
+        break
+  
   voteForCard: ->
     #
   
@@ -1085,5 +1094,10 @@ module.exports = (robot) =>
     if gameExists is 1 and g and g.votingPeriod is 1
       g.submitVote(msg)
       
+  robot.respond /discard\s(\d+)/i, (msg) ->
+    if gameExists is 1 and g and gameStarted is 1
+      g.discardCard(msg)
+      
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
+  msg.send "During a game, you can \"submit #\", \"vote #\", \"discard \". Submitting and voting only allowed at the appropriate times. You can discard a card at any time if you do not know what it means."
