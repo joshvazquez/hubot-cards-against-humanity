@@ -1070,16 +1070,18 @@ module.exports = (robot) =>
       showHelp(msg)
     else if msg.match[1] is "!card end"
       if gameExists is 1
+        msg.send "Thanks for playing!"
+        g.showScore()
         g = 0
         gameExists = 0
         gameStarted = 0
         msg.send "Cards ended."
         
-  robot.respond /submit (.*)/i, (msg) ->
+  robot.respond /submit\s(\d+)[^\d*]?(\d+)?[^\d*]?(\d+)?/i, (msg) -> # responds to 1, 2, or 3 submissions
     if gameExists is 1 and g and g.submissionPeriod is 1
       g.submitCard(msg)
       
-  robot.respond /vote (.*)/i, (msg) ->
+  robot.respond /vote\s(\d+)/i, (msg) ->
     if gameExists is 1 and g and g.votingPeriod is 1
       g.submitVote(msg)
       
