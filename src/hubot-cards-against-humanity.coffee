@@ -1044,6 +1044,13 @@ class Player
     for i in [0..@hand.length-1]
       displayHand[i] = i+1 + ": " + @hand[i] # format hand as numbered list
     displayHand
+
+class Card
+  constructor: (text, color, drawCount, playCount) ->
+    @text = text
+    @color = color
+    @drawCount = drawCount
+    @playCount = playCount
     
 module.exports = (robot) =>
   robot.hear /(.*)/i, (msg) ->
