@@ -347,7 +347,7 @@ answers = [
   "Dental dams.",
   "Dick Cheney.",
   "Dick fingers.",
-  "Dining with cardboard cutouts of the cast of “Friends.”",
+  "Dining with cardboard cutouts of the cast of \"Friends.\"",
   "Doin' it in the butt.",
   "Doing the right thing.",
   "Domino's Oreo Dessert Pizza.",
