@@ -77,8 +77,6 @@ class Game
       CZAR_VOTES : 1
   
     # Prepare
-    @questionIDPool = []
-    @answerIDPool = []  
     @players = []
     @playersToSubmit = []
     @minPlayers = 1
@@ -112,17 +110,10 @@ class Game
     @discardQuestions = []
     @discardAnswers = []
     
-    for i in [0..questions.length-1]
-      @questionIDPool[i] = i
-    
-    
-    for i in [0..answers.length-1]
-      @answerIDPool[i] = i
-    
     # Ready
     say(@channel, INFO_WELCOME)
     console.log "Total question cards: " + @questionDeck.length
-    console.log "Total answer cards: " + @answerIDPool.length
+    console.log "Total answer cards: " + @answerDeck.length
     
     
   joinPlayer: (msg) ->
@@ -188,17 +179,24 @@ class Game
   submitCard: (msg) ->
     for player in @players
       if msg.message.user.name is player.name
-        @robot.send({user: {name: player.name}}, "You submitted: " + player.hand[msg.match[1]-1])
-        @submissions.push({player: player, submission:player.hand.splice(msg.match[1]-1, 1)}) # move submission from hand to submissions
-        if (msg.match[2]-1)
-          console.log "received second card"
+        # remove card from hand
+        card = player.hand.splice(msg.match[1]-1, 1)[0]
+
+        @robot.send({user: {name: player.name}}, "You submitted: " + card.text)
+
+        @submissions.push({player: player, card: card})
+        
         @fillHand(player)
         @sendHand(player)
         break
+
+    # mark player as having submitted
     for i in [0..@playersToSubmit.length-1]
       if msg.message.user.name is @playersToSubmit[i].name
         @playersToSubmit.splice(i, 1)
         break
+
+    # if players remain to submit
     if @playersToSubmit.length >= 1
       submitMessage = msg.message.user.name + " has submitted a card. Waiting for: "
       for player in @playersToSubmit
@@ -223,15 +221,14 @@ class Game
     @randomizedSubmissions.sort ->
       0.5 - Math.random()
 
-
     if @readMode is @ReadModes.BOT_READS
       for s in @randomizedSubmissions
-        @channel.send (@currentAnswer+1) + ": " + s['submission']
+        @channel.send (@currentAnswer+1) + ": " + s['card'].text
         @currentAnswer++
         console.log "@currentAnswer: " + @currentAnswer
     else if @readMode is @ReadModes.CZAR_READS
       for s in @randomizedSubmissions
-        @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['submission']))
+        @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['card'].text))
         @currentAnswer++
         console.log "@currentAnswer: " + @currentAnswer
         
@@ -262,18 +259,18 @@ class Game
 
   fillHand: (player) ->
     while player.hand.length < @maxHand
-      r = Math.floor(Math.random() * @answerIDPool.length)
-      c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
-      player.hand.push c
-    # TODO: show hand
+      r = Math.floor(Math.random() * @answerDeck.length)
+      # pulls a random answer card out of the deck
+      card = @answerDeck.splice(r, 1)[0]
+      player.hand.push card
 
 
   sendHand: (player) ->
     # TODO: should we send in a single message to reduce message spam?
     @robot.send({user: {name: player.name}}, "Your hand:")
-    hand = player.formatHand()
-    for card in hand
-      @robot.send({user: {name: player.name}}, card)
+    displayHand = player.formatHand()
+    for displayCard in displayHand
+      @robot.send({user: {name: player.name}}, displayCard)
 
 
   chooseCzar: ->
@@ -300,7 +297,7 @@ class Game
     for player in @players
       if msg.message.user.name is player.name
         msg.send "Card discarded."
-        @channel.send msg.message.user.name + " just revealed to me in confidence that he or she doesn't know the meaning of the card: " + player.hand[msg.match[1]-1] + " Don't worry " + msg.message.user.name + ", your secret's safe with me."
+        @channel.send msg.message.user.name + " just revealed to me in confidence that he or she doesn't know the meaning of the card: " + player.hand[msg.match[1]-1].text + " Don't worry " + msg.message.user.name + ", your secret's safe with me."
         player.hand.splice(msg.match[1]-1, 1) # remove card from hand
         @fillHand(player)
         @sendHand(player)
@@ -325,8 +322,8 @@ class Game
     console.log "Czar order: " + @czarOrder
     console.log "Czar index: " + @czarIndex
     console.log "@czarOrder[0]: " + @czarOrder[0]
-    console.log "Question cards remaining: " + @questionIDPool.length
-    console.log "Answer cards remaining: " + @answerIDPool.length
+    console.log "Question cards remaining: " + @questionDeck.length
+    console.log "Answer cards remaining: " + @answerDeck.length
     scoreMessage = "Scores:"
     for player in @players
       scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
@@ -347,7 +344,7 @@ class Player
   formatHand: ->
     displayHand = []
     for i in [0..@hand.length-1]
-      displayHand[i] = i+1 + ": " + @hand[i] # format hand as numbered list
+      displayHand[i] = i+1 + ": " + @hand[i].text # format hand as numbered list
     displayHand
 
 
