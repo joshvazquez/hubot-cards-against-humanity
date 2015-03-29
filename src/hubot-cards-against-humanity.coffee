@@ -60,6 +60,7 @@ g = 0
 gameExists = no # need this or can just check `if g`, `if !g`?
 gameStarted = no
 
+
 class Game
   constructor: (channel, robot) ->
     @channel = channel
@@ -82,8 +83,6 @@ class Game
     @playersToSubmit = []
     @minPlayers = 1
     @maxHand = 10
-    @discardQuestions = [] # TODO: once a question is over, discard the question here
-    @discardAnswers = []
     @submissions = []
     @randomizedSubmissions = []
     @currentAnswer = 0
@@ -98,13 +97,20 @@ class Game
     @czar = 0
     # TODO: any referencing issues with assigning myArray2 = myArray1 and then modifying/deleting myArray1?
 
-    # Build cards
-    questionDeck = []
-    for i in [0..questions.length-1]
-      questionDeck[i] = new Card(questions[i])
-
     # Class-specific named messages
     @INFO_TOO_FEW_PLAYERS = "Not enough players. Need a total of " + @minPlayers + " players to start."
+
+    # Build cards
+    @questionDeck = []
+    for i in [0..questions.length-1]
+      @questionDeck[i] = new Card(questions[i])
+
+    @answerDeck = []
+    for i in [0..answers.length-1]
+      @answerDeck[i] = new Card(answers[i])
+    
+    @discardQuestions = []
+    @discardAnswers = []
     
     for i in [0..questions.length-1]
       @questionIDPool[i] = i
@@ -115,7 +121,7 @@ class Game
     
     # Ready
     say(@channel, INFO_WELCOME)
-    console.log "Total question cards: " + @questionIDPool.length
+    console.log "Total question cards: " + @questionDeck.length
     console.log "Total answer cards: " + @answerIDPool.length
     
     
@@ -136,6 +142,7 @@ class Game
         joinMessage = joinMessage + " " + player.name
       joinMessage = joinMessage + ". When all players have joined, say \"!card start\"."
       @channel.send joinMessage
+
     
   startGame: ->
     if @players.length < @minPlayers
@@ -150,24 +157,35 @@ class Game
         @sendHand(player)
       gameStarted = yes
       @playQuestion()
-      
+
+
   playQuestion: ->
     @votingPeriod = 0
     @currentAnswer = 0
     @lastQuestion = 0
     @czar = @chooseCzar()
     @roundNumber++
+    
+    # pulls a random question card out of the deck
+    r = Math.floor(Math.random() * @questionDeck.length)
+    card = @questionDeck.splice(r, 1)[0]
+
+    @lastQuestion = card
+    @channel.send "Round " + @roundNumber
+    @channel.send card.text
+    @startSubmitting()
+
+
+  startSubmitting: ->
+    @isSubmissionPeriod = yes
     @playersToSubmit = []
     @submissions = []
-    r = Math.floor(Math.random() * @questionIDPool.length)
-    c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
-    @lastQuestion = c
-    @channel.send "Round " + @roundNumber
-    @channel.send c
-    @isSubmissionPeriod = yes
+
+    # put all players into "needs to submit" list
     for player in @players
       @playersToSubmit.push player
-    
+
+
   submitCard: (msg) ->
     for player in @players
       if msg.message.user.name is player.name
@@ -190,13 +208,15 @@ class Game
     else
       @showAnswers()
 
+
   showAnswers: ->
     @isSubmissionPeriod = no
     @votingPeriod = 1
     say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
-    @channel.send @lastQuestion
+    @channel.send @lastQuestion.text
     @nextAnswer()
-  
+
+
   nextAnswer: -> # send the next submission to the channel or czar
     @randomizedSubmissions = @submissions
     @randomizedSubmissions.sort ->
@@ -221,6 +241,7 @@ class Game
         @currentAnswer = 0
         @startVoting()
 
+
   startVoting: ->
     if @voteMode is @VoteModes.CHANNEL_VOTES
       # TODO: not implemented. Should this mode be available?
@@ -228,16 +249,20 @@ class Game
     else if @voteMode is @VoteModes.CZAR_VOTES
       @channel.send "The czar " + @czar.name + " is now voting."
       @robot.send({user: {name: @czar.name}}, "Voting time! Type \"vote #\" where # is the number prefixing the submission you want to vote for (numbers in the channel).")
-  
+
+
   submitVote: (msg) ->
     if @voteMode is @VoteModes.CHANNEL_VOTES
       1
       # implement voteForCard()
     else if @voteMode is @VoteModes.CZAR_VOTES
       @robot.send({user: {name: @czar.name}}, "Thanks for your vote.")
-      @channel.send "This round's winner is " + @randomizedSubmissions[msg.match[1]-1]['player'].name + " with submission " + msg.match[1] + "."
+      winner = @randomizedSubmissions[msg.match[1]-1]['player'].name
+      @channel.send "This round's winner is " + winner + " with submission " + msg.match[1] + "."
       @randomizedSubmissions[msg.match[1]-1]['player'].score++
+      @discardQuestions.push @lastQuestion
       @playQuestion(@channel)
+
 
   fillHand: (player) ->
     while player.hand.length < @maxHand
@@ -245,14 +270,16 @@ class Game
       c = answers[@answerIDPool.splice(r, 1)[0]] # removes a random answer card from the pool and returns it
       player.hand.push c
     # TODO: show hand
-    
+
+
   sendHand: (player) ->
     # TODO: should we send in a single message to reduce message spam?
     @robot.send({user: {name: player.name}}, "Your hand:")
     hand = player.formatHand()
     for card in hand
       @robot.send({user: {name: player.name}}, card)
-      
+
+
   chooseCzar: ->
     if !@czarOrder or @czarOrder.length is 0
       console.log "@czarOrder empty"
@@ -271,7 +298,8 @@ class Game
       else
         console.log "PATH 3 return @czarOrder[@czarIndex++]"
         return @czarOrder[@czarIndex++] # return czar player and set next czar
-        
+
+
   discardCard: (msg) ->
     for player in @players
       if msg.message.user.name is player.name
@@ -281,16 +309,19 @@ class Game
         @fillHand(player)
         @sendHand(player)
         break
-  
+
+
   voteForCard: ->
     #
-  
+
+
   showScore: ->
     scoreMessage = "Scores:"
     for player in @players
       scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
     @channel.send scoreMessage
-  
+
+
   gameInfo: ->
     # show current czar, current round, questions in deck, answers in deck, player count
     console.log "Current round: " + @roundNumber
@@ -304,7 +335,8 @@ class Game
     for player in @players
       scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
     console.log scoreMessage
-    
+
+
 class Player
   constructor: (msg, robot) ->
     @msg = msg
@@ -313,12 +345,15 @@ class Player
     @name = msg.message.user.name
     @hand = []
     @score = 0
-    
+    @wonCards = []
+
+
   formatHand: ->
     displayHand = []
     for i in [0..@hand.length-1]
       displayHand[i] = i+1 + ": " + @hand[i] # format hand as numbered list
     displayHand
+
 
 class Card
   constructor: (text) ->
@@ -334,6 +369,7 @@ class Card
       @drawCount = 2
       @playCount = 3
     
+
 module.exports = (robot) =>
   robot.hear /(.*)/i, (msg) ->
     command = getCommand(msg)
@@ -374,29 +410,36 @@ module.exports = (robot) =>
         gameStarted = no
         say(msg, INFO_END)
         
+
   robot.respond /submit\s(\d+)[^\d*]?(\d+)?[^\d*]?(\d+)?/i, (msg) -> # responds to 1, 2, or 3 submissions
     if gameExists and g and g.isSubmissionPeriod
       g.submitCard(msg)
       
+
   robot.respond /vote\s(\d+)/i, (msg) ->
     if gameExists and g and g.votingPeriod is 1
       g.submitVote(msg)
       
+
   robot.respond /discard\s(\d+)/i, (msg) ->
     if gameExists and g and gameStarted 
       g.discardCard(msg)
       
+
   robot.respond /next/i, (msg) ->
     if gameExists and g and g.votingPeriod is 1 and msg.message.user.name is g.czar.name
       console.log "czar called next answer"
       g.nextAnswer()
       
+
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
   msg.send "During a game, you can \"submit #\", \"vote #\", \"discard \". Submitting and voting only allowed at the appropriate times. You can discard a card at any time if you do not know what it means."
 
+
 say = (msg, text) ->
   msg.send text
+
 
 getCommand = (msg) ->
   if msg.match[1] is "!card game"
