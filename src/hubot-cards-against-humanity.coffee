@@ -212,27 +212,25 @@ class Game
     @isVotingPeriod = yes
     say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
     @channel.send @lastQuestion.text
-    @nextAnswer()
 
-
-  nextAnswer: -> # send the next submission to the channel or czar
     # reorder the submissions randomly
     @randomizedSubmissions = @submissions
     @randomizedSubmissions.sort ->
       0.5 - Math.random()
 
-    if @readMode is @ReadModes.BOT_READS
-      for s in @randomizedSubmissions
-        @channel.send (@currentAnswer+1) + ": " + s['card'].text
-        @currentAnswer++
-        console.log "@currentAnswer: " + @currentAnswer
-    else if @readMode is @ReadModes.CZAR_READS
-      for s in @randomizedSubmissions
-        @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['card'].text))
-        @currentAnswer++
-        console.log "@currentAnswer: " + @currentAnswer
+    for s in @randomizedSubmissions
+      @nextAnswer(s)
         
     @startVoting()
+
+  nextAnswer: (submission) ->
+    if @readMode is @ReadModes.BOT_READS
+      @channel.send (@currentAnswer+1) + ": " + submission['card'].text
+    else if @readMode is @ReadModes.CZAR_READS
+      @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + submission['card'].text))
+    
+    @currentAnswer++
+    console.log "@currentAnswer: " + @currentAnswer
 
 
   startVoting: ->
