@@ -556,7 +556,7 @@ answers = [
   "Nocturnal emissions.",
   "Not giving a shit about the Third World.",
   "Not reciprocating oral sex.",
-  "Nublile slave boys.",
+  "Nubile slave boys.",
   "Nunchuck moves.",
   "Obesity.",
   "Object permanence.",
@@ -798,14 +798,47 @@ answers = [
   "YOU MUST CONSTRUCT ADDITIONAL PYLONS.",
   "Zeus's sexual appetites."
 ]
+
+# Named messages
+INFO_GAME_EXISTS = "A game already exists. Say \"!card join\" to join."
+INFO_NO_GAME_EXISTS = "There is no game to start. Say \"!card game\" to set up a game."
+INFO_GAME_IN_PROGRESS = "A game is already in progress."
+INFO_NO_GAME_IN_PROGRESS = "No game in progress to join. Say \"!card game\" to set up a game."
+INFO_WELCOME = "Welcome to Cards Against Humanity! To join the game, say \"!card join\"."
+INFO_THANKS = "Thanks for playing!"
+INFO_END = "Cards ended."
+INFO_DUPLICATE_PLAYER = "Player is already in the list."
+INFO_GAME_STARTED = "Game started! Sending hands via private message."
+INFO_HOW_TO_SUBMIT = "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\""
+INFO_ALL_PLAYERS_SUBMITTED = "All players have submitted their cards! Submissions are in random order."
+
+Commands = 
+  GAME_NEW : 0
+  GAME_JOIN : 1
+  GAME_START : 2
+  GAME_SCORE : 3
+  GAME_END : 4
+  INFO : 5
+  HELP : 6
+
 g = 0
-gameExists = 0 # need this or can just check `if g`, `if !g`?
-gameStarted = 0
+gameExists = no # need this or can just check `if g`, `if !g`?
+gameStarted = no
 
 class Game
-  constructor: (msg, robot) ->
-    @msg = msg
+  constructor: (channel, robot) ->
+    @channel = channel
     @robot = robot
+
+    # Modes for reading answer cards. Czar mode recommended when players are in a voice call
+    @ReadModes = 
+      BOT_READS : 0
+      CZAR_READS : 1
+
+    # Modes for voting.
+    @VoteModes = 
+      CHANNEL_VOTES : 0
+      CZAR_VOTES : 1
   
     # Prepare
     @questionIDPool = []
@@ -819,17 +852,19 @@ class Game
     @submissions = []
     @randomizedSubmissions = []
     @currentAnswer = 0
-    @submissionPeriod = 0
+    @isSubmissionPeriod = no
     @votingPeriod = 0
     @roundNumber = 0
     @lastQuestion = 0
-    @readMode = 0 # 0: bot reads answers; 1: czar reads answers (use when using Skype voice)
-    @voteMode = 1 # 0: channel votes; 1: czar votes. 0 not implemented yet.
+    @readMode = @ReadModes.BOT_READS
+    @voteMode = @VoteModes.CZAR_VOTES
     @czarOrder = []
     @czarIndex = 0
     @czar = 0
-    # TODO: remove msg parameter from functions and change internal reference to @msg
     # TODO: any referencing issues with assigning myArray2 = myArray1 and then modifying/deleting myArray1?
+
+    # Class-specific named messages
+    @INFO_TOO_FEW_PLAYERS = "Not enough players. Need a total of " + @minPlayers + " players to start."
     
     for i in [0..questions.length-1]
       @questionIDPool[i] = i
@@ -839,44 +874,44 @@ class Game
       @answerIDPool[i] = i
     
     # Ready
-    msg.send "Welcome to Cards Against Humanity! To join the game, say \"!card join\"."
+    say(@channel, INFO_WELCOME)
     console.log "Total question cards: " + @questionIDPool.length
     console.log "Total answer cards: " + @answerIDPool.length
     
     
   joinPlayer: (msg) ->
-    found = 0
+    found = no
     for player in @players
       if msg.message.user.name is player.name
         console.log msg.message.user.name + " tried to join but is already in the list as " + player.name
-        found = 1
+        found = yes
         break
-    if found is 1
-      msg.send "Player is already in the list."
+    if found
+      say(@channel, INFO_DUPLICATE_PLAYER)
     else    
       p = new Player(msg, @robot)
       @players.push p
-      reply = p.name + " has joined the game. Players:"
+      joinMessage = p.name + " has joined the game. Players:"
       for player in @players
-        reply = reply + " " + player.name
-      reply = reply + ". When all players have joined, say \"!card start\"."
-      msg.send reply
+        joinMessage = joinMessage + " " + player.name
+      joinMessage = joinMessage + ". When all players have joined, say \"!card start\"."
+      @channel.send joinMessage
     
-  startGame: (msg) ->
+  startGame: ->
     if @players.length < @minPlayers
-      msg.send "Not enough players. Need a total of " + @minPlayers + " players to start."
+      say(@channel, @INFO_TOO_FEW_PLAYERS)
     else
-      msg.send "Game started! Sending hands via private message."
-      msg.send "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\""
+      say(@channel, INFO_GAME_STARTED)
+      say(@channel, INFO_HOW_TO_SUBMIT)
       for player in @players
         console.log "Filling hand for " + player.name
         @fillHand(player)
         console.log "Sending hand for " + player.name
         @sendHand(player)
-      gameStarted = 1
-      @playQuestion(msg)
+      gameStarted = yes
+      @playQuestion()
       
-  playQuestion: (msg) ->
+  playQuestion: ->
     @votingPeriod = 0
     @currentAnswer = 0
     @lastQuestion = 0
@@ -887,9 +922,9 @@ class Game
     r = Math.floor(Math.random() * @questionIDPool.length)
     c = questions[@questionIDPool.splice(r, 1)[0]] # removes a random question card from the pool and returns it
     @lastQuestion = c
-    msg.send "Round " + @roundNumber
-    msg.send c
-    @submissionPeriod = 1
+    @channel.send "Round " + @roundNumber
+    @channel.send c
+    @isSubmissionPeriod = yes
     for player in @players
       @playersToSubmit.push player
     
@@ -908,18 +943,18 @@ class Game
         @playersToSubmit.splice(i, 1)
         break
     if @playersToSubmit.length >= 1
-      m = msg.message.user.name + " has submitted a card. Waiting for: "
+      submitMessage = msg.message.user.name + " has submitted a card. Waiting for: "
       for player in @playersToSubmit
-        m = m + " " + player.name
-      @msg.send m
+        submitMessage = submitMessage + " " + player.name
+      @channel.send submitMessage
     else
-      @showAnswers(@msg)
+      @showAnswers()
 
-  showAnswers: (msg) ->
-    @submissionPeriod = 0
+  showAnswers: ->
+    @isSubmissionPeriod = no
     @votingPeriod = 1
-    msg.send "All players have submitted their cards! Submissions are in random order."
-    msg.send @lastQuestion
+    say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
+    @channel.send @lastQuestion
     @nextAnswer()
   
   nextAnswer: -> # send the next submission to the channel or czar
@@ -930,12 +965,12 @@ class Game
       @currentAnswer = 0
       @startVoting()
     else
-      if @readMode is 0 # bot reads
+      if @readMode is @ReadModes.BOT_READS
         for s in @randomizedSubmissions
-          @msg.send (@currentAnswer+1) + ": " + s['submission']
+          @channel.send (@currentAnswer+1) + ": " + s['submission']
           @currentAnswer++
           console.log "@currentAnswer: " + @currentAnswer
-      else if @readMode is 1 # bot sends to czar
+      else if @readMode is @ReadModes.CZAR_READS
         for s in @randomizedSubmissions
           @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['submission']))
           @currentAnswer++
@@ -947,22 +982,22 @@ class Game
         @startVoting()
 
   startVoting: ->
-    if @voteMode is 0 # channel votes
+    if @voteMode is @VoteModes.CHANNEL_VOTES
       # TODO: not implemented. Should this mode be available?
-      @msg.send "Voting time! Type \"!card vote #\" where # is the number prefixing the submission you want to vote for."
-    else if @voteMode is 1 # czar votes
-      @msg.send "The czar " + @czar.name + " is now voting."
+      @channel.send "Voting time! Type \"!card vote #\" where # is the number prefixing the submission you want to vote for."
+    else if @voteMode is @VoteModes.CZAR_VOTES
+      @channel.send "The czar " + @czar.name + " is now voting."
       @robot.send({user: {name: @czar.name}}, "Voting time! Type \"vote #\" where # is the number prefixing the submission you want to vote for (numbers in the channel).")
   
   submitVote: (msg) ->
-    if @voteMode is 0 # channel votes, not implemented
+    if @voteMode is @VoteModes.CHANNEL_VOTES
       1
       # implement voteForCard()
-    else if @voteMode is 1 # czar votes
+    else if @voteMode is @VoteModes.CZAR_VOTES
       @robot.send({user: {name: @czar.name}}, "Thanks for your vote.")
-      @msg.send "This round's winner is " + @randomizedSubmissions[msg.match[1]-1]['player'].name + " with submission " + msg.match[1] + "."
+      @channel.send "This round's winner is " + @randomizedSubmissions[msg.match[1]-1]['player'].name + " with submission " + msg.match[1] + "."
       @randomizedSubmissions[msg.match[1]-1]['player'].score++
-      @playQuestion(@msg)
+      @playQuestion(@channel)
 
   fillHand: (player) ->
     while player.hand.length < @maxHand
@@ -1001,7 +1036,7 @@ class Game
     for player in @players
       if msg.message.user.name is player.name
         msg.send "Card discarded."
-        @msg.send msg.message.user.name + " just revealed to me in confidence that he or she doesn't know the meaning of the card: " + player.hand[msg.match[1]-1] + " Don't worry " + msg.message.user.name + ", your secret's safe with me."
+        @channel.send msg.message.user.name + " just revealed to me in confidence that he or she doesn't know the meaning of the card: " + player.hand[msg.match[1]-1] + " Don't worry " + msg.message.user.name + ", your secret's safe with me."
         player.hand.splice(msg.match[1]-1, 1) # remove card from hand
         @fillHand(player)
         @sendHand(player)
@@ -1011,10 +1046,10 @@ class Game
     #
   
   showScore: ->
-    scoreMsg = "Scores:"
+    scoreMessage = "Scores:"
     for player in @players
-      scoreMsg = scoreMsg + " " + player.name + " " + player.score + ","
-    @msg.send scoreMsg
+      scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
+    @channel.send scoreMessage
   
   gameInfo: ->
     # show current czar, current round, questions in deck, answers in deck, player count
@@ -1025,10 +1060,10 @@ class Game
     console.log "@czarOrder[0]: " + @czarOrder[0]
     console.log "Question cards remaining: " + @questionIDPool.length
     console.log "Answer cards remaining: " + @answerIDPool.length
-    scoreMsg = "Scores:"
+    scoreMessage = "Scores:"
     for player in @players
-      scoreMsg = scoreMsg + " " + player.name + " " + player.score + ","
-    console.log scoreMsg
+      scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
+    console.log scoreMessage
     
 class Player
   constructor: (msg, robot) ->
@@ -1054,61 +1089,80 @@ class Card
     
 module.exports = (robot) =>
   robot.hear /(.*)/i, (msg) ->
-    if msg.match[1] is "!card game"
-      if gameExists is 0 or !gameExists
+    command = getCommand(msg)
+    if command is Commands.GAME_NEW
+      unless gameExists
         g = new Game(msg, robot)
-        gameExists = 1
-      else if gameExists is 1
-        msg.send "A game is already in progress. Say \"!card help\" to see available commands."
-    else if msg.match[1] is "!card join"
-      if gameExists is 0 or !gameExists
-        msg.send "No game in progress to join. Say \"!card game\" to set up a game."      
-      else if gameStarted is 1
-        msg.send "A game is already in progress."
-      else if gameExists is 1
+        gameExists = yes
+      else
+        say(msg, INFO_GAME_EXISTS)
+    else if command is Commands.GAME_JOIN
+      unless gameExists
+        say(msg, INFO_NO_GAME_IN_PROGRESS)
+      else if gameStarted
+        say(msg, INFO_GAME_IN_PROGRESS)
+      else if gameExists
         g.joinPlayer(msg)
-    else if msg.match[1] is "!card start"
-      if gameExists is 0 or !gameExists
-        msg.send "No game in progress to start. Say \"!card game\" to set up a game."
-      else if gameStarted is 1
-        msg.send "A game is already in progress."      
-      else if gameExists is 1
+    else if command is Commands.GAME_START
+      unless gameExists
+        say(msg, INFO_NO_GAME_EXISTS)
+      else if gameStarted
+        say(msg, INFO_GAME_IN_PROGRESS)
+      else if gameExists
         g.startGame(msg)
-        gameStarted = 1
-    else if msg.match[1] is "!card score"
-      if gameExists is 1 and g
+    else if command is Commands.GAME_SCORE
+      if gameExists and g
         g.showScore()
-    else if msg.match[1] is "!card info"
-      if gameExists is 1 and g
+    else if command is Commands.INFO
+      if gameExists and g
         g.gameInfo()
-    else if msg.match[1] is "!card help"
+    else if command is Commands.HELP
       showHelp(msg)
-    else if msg.match[1] is "!card end"
-      if gameExists is 1
-        msg.send "Thanks for playing!"
+    else if command is Commands.GAME_END
+      if gameExists
+        say(msg, INFO_THANKS)
         g.showScore()
         g = 0
-        gameExists = 0
-        gameStarted = 0
-        msg.send "Cards ended."
+        gameExists = no
+        gameStarted = no
+        say(msg, INFO_END)
         
   robot.respond /submit\s(\d+)[^\d*]?(\d+)?[^\d*]?(\d+)?/i, (msg) -> # responds to 1, 2, or 3 submissions
-    if gameExists is 1 and g and g.submissionPeriod is 1
+    if gameExists and g and g.isSubmissionPeriod
       g.submitCard(msg)
       
   robot.respond /vote\s(\d+)/i, (msg) ->
-    if gameExists is 1 and g and g.votingPeriod is 1
+    if gameExists and g and g.votingPeriod is 1
       g.submitVote(msg)
       
   robot.respond /discard\s(\d+)/i, (msg) ->
-    if gameExists is 1 and g and gameStarted is 1
+    if gameExists and g and gameStarted 
       g.discardCard(msg)
       
   robot.respond /next/i, (msg) ->
-    if gameExists is 1 and g and g.votingPeriod is 1 and msg.message.user.name is g.czar.name
+    if gameExists and g and g.votingPeriod is 1 and msg.message.user.name is g.czar.name
       console.log "czar called next answer"
       g.nextAnswer()
       
 showHelp = (msg) ->
   msg.send "Available commands: !card game, !card join, !card start, !card help"
   msg.send "During a game, you can \"submit #\", \"vote #\", \"discard \". Submitting and voting only allowed at the appropriate times. You can discard a card at any time if you do not know what it means."
+
+say = (msg, text) ->
+  msg.send text
+
+getCommand = (msg) ->
+  if msg.match[1] is "!card game"
+    Commands.GAME_NEW
+  else if msg.match[1] is "!card join"
+    Commands.GAME_JOIN
+  else if msg.match[1] is "!card start"
+    Commands.GAME_START
+  else if msg.match[1] is "!card score"
+    Commands.GAME_SCORE
+  else if msg.match[1] is "!card end"
+    Commands.GAME_END
+  else if msg.match[1] is "!card info"
+    Commands.INFO
+  else if msg.match[1] is "!card help"
+    Commands.HELP
