@@ -87,7 +87,7 @@ class Game
     @randomizedSubmissions = []
     @currentAnswer = 0
     @isSubmissionPeriod = no
-    @votingPeriod = 0
+    @isVotingPeriod = no
     @roundNumber = 0
     @lastQuestion = 0
     @readMode = @ReadModes.BOT_READS
@@ -160,7 +160,7 @@ class Game
 
 
   playQuestion: ->
-    @votingPeriod = 0
+    @isVotingPeriod = no
     @currentAnswer = 0
     @lastQuestion = 0
     @czar = @chooseCzar()
@@ -211,7 +211,7 @@ class Game
 
   showAnswers: ->
     @isSubmissionPeriod = no
-    @votingPeriod = 1
+    @isVotingPeriod = yes
     say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
     @channel.send @lastQuestion.text
     @nextAnswer()
@@ -417,7 +417,7 @@ module.exports = (robot) =>
       
 
   robot.respond /vote\s(\d+)/i, (msg) ->
-    if gameExists and g and g.votingPeriod is 1
+    if gameExists and g and g.isVotingPeriod
       g.submitVote(msg)
       
 
@@ -427,7 +427,7 @@ module.exports = (robot) =>
       
 
   robot.respond /next/i, (msg) ->
-    if gameExists and g and g.votingPeriod is 1 and msg.message.user.name is g.czar.name
+    if gameExists and g and g.isVotingPeriod and msg.message.user.name is g.czar.name
       console.log "czar called next answer"
       g.nextAnswer()
       
