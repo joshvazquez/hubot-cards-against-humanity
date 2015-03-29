@@ -161,7 +161,6 @@ class Game
 
   playQuestion: ->
     @isVotingPeriod = no
-    @currentAnswer = 0
     @lastQuestion = 0
     @czar = @chooseCzar()
     @roundNumber++
@@ -210,6 +209,7 @@ class Game
 
 
   showAnswers: ->
+    @currentAnswer = 0
     @isSubmissionPeriod = no
     @isVotingPeriod = yes
     say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
@@ -218,28 +218,27 @@ class Game
 
 
   nextAnswer: -> # send the next submission to the channel or czar
+    # reorder the submissions randomly
     @randomizedSubmissions = @submissions
     @randomizedSubmissions.sort ->
       0.5 - Math.random()
-    if @currentAnswer >= @randomizedSubmissions.length
+
+
+    if @readMode is @ReadModes.BOT_READS
+      for s in @randomizedSubmissions
+        @channel.send (@currentAnswer+1) + ": " + s['submission']
+        @currentAnswer++
+        console.log "@currentAnswer: " + @currentAnswer
+    else if @readMode is @ReadModes.CZAR_READS
+      for s in @randomizedSubmissions
+        @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['submission']))
+        @currentAnswer++
+        console.log "@currentAnswer: " + @currentAnswer
+        
+    if @currentAnswer >= @randomizedSubmissions.length # duplicate code
+      console.log "second time @currentAnswer >= @randomizedSubmissions.length"
       @currentAnswer = 0
       @startVoting()
-    else
-      if @readMode is @ReadModes.BOT_READS
-        for s in @randomizedSubmissions
-          @channel.send (@currentAnswer+1) + ": " + s['submission']
-          @currentAnswer++
-          console.log "@currentAnswer: " + @currentAnswer
-      else if @readMode is @ReadModes.CZAR_READS
-        for s in @randomizedSubmissions
-          @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + s['submission']))
-          @currentAnswer++
-          console.log "@currentAnswer: " + @currentAnswer
-          
-      if @currentAnswer >= @randomizedSubmissions.length # duplicate code
-        console.log "second time @currentAnswer >= @randomizedSubmissions.length"
-        @currentAnswer = 0
-        @startVoting()
 
 
   startVoting: ->
