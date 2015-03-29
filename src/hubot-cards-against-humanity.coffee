@@ -235,10 +235,7 @@ class Game
         @currentAnswer++
         console.log "@currentAnswer: " + @currentAnswer
         
-    if @currentAnswer >= @randomizedSubmissions.length # duplicate code
-      console.log "second time @currentAnswer >= @randomizedSubmissions.length"
-      @currentAnswer = 0
-      @startVoting()
+    @startVoting()
 
 
   startVoting: ->
