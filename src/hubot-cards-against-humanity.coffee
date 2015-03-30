@@ -230,7 +230,6 @@ class Game
       @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + submission['card'].text))
     
     @currentAnswer++
-    console.log "@currentAnswer: " + @currentAnswer
 
 
   startVoting: ->
@@ -272,23 +271,14 @@ class Game
 
 
   chooseCzar: ->
-    if !@czarOrder or @czarOrder.length is 0
-      console.log "@czarOrder empty"
+    if @czarOrder.length is 0
       for player in @players
-        console.log "push player to @czarOrder"
-        @czarOrder.push player # join order determines czar order
-      console.log "PATH 1 return @czarOrder[@czarIndex++]"
-      return @czarOrder[@czarIndex++] # return czar player and set next czar
-    else
-      console.log "@czarOrder not empty"
-      if @czarIndex >= @czarOrder.length
-        console.log "@czarIndex >= @czarOrder.length"
-        @czarIndex = 0 # back to top of list
-        console.log "PATH 2 return @czarOrder[@czarIndex++]"
-        return @czarOrder[@czarIndex++] # return czar player and set next czar
-      else
-        console.log "PATH 3 return @czarOrder[@czarIndex++]"
-        return @czarOrder[@czarIndex++] # return czar player and set next czar
+        # join order determines czar order
+        @czarOrder.push player
+
+    czar = @czarOrder[@czarIndex % @czarOrder.length]
+    @czarIndex++
+    return czar
 
 
   discardCard: (msg) ->
