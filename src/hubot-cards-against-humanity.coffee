@@ -240,7 +240,10 @@ class Game
     @isSubmissionPeriod = no
     @isVotingPeriod = yes
     say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
-    @channel.send @currentQuestion.text
+
+    blanks = (@currentQuestion.text.match(/_____/g) || []).length
+    if blanks == 0
+      @channel.send @currentQuestion.text
 
     # reorder the submissions randomly
     @randomizedSubmissions = @submissions
@@ -254,9 +257,21 @@ class Game
 
   nextAnswer: (submission) ->
     answerMessage = (@currentAnswer+1) + ":"
+
     cards = submission['cards']
     for card in cards
       answerMessage += " " + card.text
+
+    filledInQuestion = @currentQuestion.text
+    blanks = (@currentQuestion.text.match(/_____/g) || []).length
+    if blanks > 0
+      for i in [0..blanks-1]
+        cardText = cards[i].text
+        cardText = cardText[0..cardText.length-2]
+        filledInQuestion = filledInQuestion.replace("_____", cardText)
+      filledInQuestion = filledInQuestion.replace("(Draw 2, Pick 3) ", "")
+      filledInQuestion = filledInQuestion.replace("(Pick 2) ", "")
+      answerMessage = (@currentAnswer+1) + ": " + filledInQuestion
 
     if @readMode is @ReadModes.BOT_READS
       @channel.send answerMessage
