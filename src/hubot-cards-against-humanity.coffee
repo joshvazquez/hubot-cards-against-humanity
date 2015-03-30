@@ -18,7 +18,7 @@
 #   Josh Vazquez
 #
 # Version:
-#   0.1.0
+#   0.3.0
 
 # CONFIG
 QUESTIONS_PATH = 'scripts/questions.json'
@@ -43,7 +43,7 @@ INFO_THANKS = "Thanks for playing!"
 INFO_END = "Cards ended."
 INFO_DUPLICATE_PLAYER = "Player is already in the list."
 INFO_GAME_STARTED = "Game started! Sending hands via private message."
-INFO_HOW_TO_SUBMIT = "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\""
+INFO_HOW_TO_SUBMIT = "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\". If a question requires multiple cards to be submitted, submit like this: \"submit 3 4 5\"."
 INFO_ALL_PLAYERS_SUBMITTED = "All players have submitted their cards! Submissions are in random order."
 
 Commands = 
@@ -82,7 +82,6 @@ class Game
     @isSubmissionPeriod = no
     @isVotingPeriod = no
     @roundNumber = 0
-    @lastQuestion = 0
     @readMode = @ReadModes.BOT_READS
     @voteMode = @VoteModes.CZAR_VOTES
     @czarIndex = 0
@@ -122,8 +121,8 @@ class Game
       @players.push p
       joinMessage = p.name + " has joined the game. Players:"
       for player in @players
-        joinMessage = joinMessage + " " + player.name
-      joinMessage = joinMessage + ". When all players have joined, say \"!card start\"."
+        joinMessage += " " + player.name
+      joinMessage += ". When all players have joined, say \"!card start\"."
       @channel.send joinMessage
 
     
@@ -134,9 +133,7 @@ class Game
       say(@channel, INFO_GAME_STARTED)
       say(@channel, INFO_HOW_TO_SUBMIT)
       for player in @players
-        console.log "Filling hand for " + player.name
         @fillHand(player)
-        console.log "Sending hand for " + player.name
         @sendHand(player)
       gameStarted = yes
       @playQuestion()
@@ -144,7 +141,6 @@ class Game
 
   playQuestion: ->
     @isVotingPeriod = no
-    @lastQuestion = 0
     @czar = @chooseCzar()
     @roundNumber++
     
@@ -152,9 +148,18 @@ class Game
     r = Math.floor(Math.random() * @questionDeck.length)
     card = @questionDeck.splice(r, 1)[0]
 
-    @lastQuestion = card
+    @currentQuestion = card
     @channel.send "Round " + @roundNumber
     @channel.send card.text
+
+    # players draw extra cards if necessary
+    for player in @players
+      toDraw = @currentQuestion.drawCount
+      while toDraw > 0
+        @drawCard(player)
+        toDraw--
+      @sendHand(player)
+
     @startSubmitting()
 
 
@@ -171,12 +176,44 @@ class Game
   submitCard: (msg) ->
     for player in @players
       if msg.message.user.name is player.name
-        # remove card from hand
-        card = player.hand.splice(msg.match[1]-1, 1)[0]
+        cards = []
+        cardIndexes = []
+        # get first card
+        cards[0] = player.hand[msg.match[1]-1]
+        cardIndexes.push msg.match[1]-1
 
-        @robot.send({user: {name: player.name}}, "You submitted: " + card.text)
+        # get second card
+        if msg.match[2]
+          cards[1] = player.hand[msg.match[2]-1]
+          cardIndexes.push msg.match[2]-1
+          
+        # get third card
+        if msg.match[3]
+          cards[2] = player.hand[msg.match[3]-1]
+          cardIndexes.push msg.match[3]-1
 
-        @submissions.push({player: player, card: card})
+        # enforce correct number of cards submitted
+        if cardIndexes.length != @currentQuestion.playCount
+          failSubmitMessage = "You must submit exactly " + @currentQuestion.playCount
+          if @currentQuestion.playCount == 1
+            failSubmitMessage += " card."
+          else
+            failSubmitMessage += " cards."
+          @robot.send({user: {name: player.name}}, failSubmitMessage)
+          return
+
+        # remove cards from hand from largest index to smallest to not disrupt order while removing
+        cardIndexes.sort()
+        cardIndexes.reverse()
+        for i in cardIndexes
+          player.hand.splice(i, 1)[0]
+        
+        submitMessage = "You submitted:"
+        for card in cards
+          submitMessage += " " + card.text
+
+        @robot.send({user: {name: player.name}}, submitMessage)
+        @submissions.push({player: player, cards: cards})
         
         @fillHand(player)
         @sendHand(player)
@@ -192,7 +229,7 @@ class Game
     if @playersToSubmit.length >= 1
       submitMessage = msg.message.user.name + " has submitted a card. Waiting for: "
       for player in @playersToSubmit
-        submitMessage = submitMessage + " " + player.name
+        submitMessage += " " + player.name
       @channel.send submitMessage
     else
       @showAnswers()
@@ -203,7 +240,7 @@ class Game
     @isSubmissionPeriod = no
     @isVotingPeriod = yes
     say(@channel, INFO_ALL_PLAYERS_SUBMITTED)
-    @channel.send @lastQuestion.text
+    @channel.send @currentQuestion.text
 
     # reorder the submissions randomly
     @randomizedSubmissions = @submissions
@@ -216,10 +253,15 @@ class Game
     @startVoting()
 
   nextAnswer: (submission) ->
+    answerMessage = (@currentAnswer+1) + ":"
+    cards = submission['cards']
+    for card in cards
+      answerMessage += " " + card.text
+
     if @readMode is @ReadModes.BOT_READS
-      @channel.send (@currentAnswer+1) + ": " + submission['card'].text
+      @channel.send answerMessage
     else if @readMode is @ReadModes.CZAR_READS
-      @robot.send({user: {name: @czar.name}}, ((@currentAnswer+1) + ": " + submission['card'].text))
+      @robot.send({user: {name: @czar.name}}, answerMessage)
     
     @currentAnswer++
 
@@ -242,16 +284,19 @@ class Game
       winner = @randomizedSubmissions[msg.match[1]-1]['player'].name
       @channel.send "This round's winner is " + winner + " with submission " + msg.match[1] + "."
       @randomizedSubmissions[msg.match[1]-1]['player'].score++
-      @discardQuestions.push @lastQuestion
+      @discardQuestions.push @currentQuestion
       @playQuestion(@channel)
 
 
   fillHand: (player) ->
     while player.hand.length < @maxHand
-      r = Math.floor(Math.random() * @answerDeck.length)
-      # pulls a random answer card out of the deck
-      card = @answerDeck.splice(r, 1)[0]
-      player.hand.push card
+      @drawCard(player)
+
+  drawCard: (player) ->
+    r = Math.floor(Math.random() * @answerDeck.length)
+    # pulls a random answer card out of the deck
+    card = @answerDeck.splice(r, 1)[0]
+    player.hand.push card
 
 
   sendHand: (player) ->
@@ -286,7 +331,7 @@ class Game
   showScore: ->
     scoreMessage = "Scores:"
     for player in @players
-      scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
+      scoreMessage += " " + player.name + " " + player.score + ","
 
     # strip trailing comma
     scoreMessage = scoreMessage[0..scoreMessage.length-2]
@@ -302,7 +347,7 @@ class Game
     console.log "Answer cards remaining: " + @answerDeck.length
     scoreMessage = "Scores:"
     for player in @players
-      scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
+      scoreMessage += " " + player.name + " " + player.score + ","
     console.log scoreMessage
 
 
@@ -332,9 +377,9 @@ class Card
 
     # count the number of blanks on the card to determine what kind of card it is
     blanks = (text.match(/_____/g) || []).length
-    if blanks is 2
+    if blanks is 2 or @text.indexOf("(Pick 2)") > -1
       @playCount = 2
-    else if blanks is 3
+    else if blanks is 3 or @text.indexOf("(Draw 2, Pick 3)") > -1
       @drawCount = 2
       @playCount = 3
     
