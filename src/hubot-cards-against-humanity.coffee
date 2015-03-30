@@ -20,12 +20,11 @@
 # Version:
 #   0.1.0
 
-# TODO: flag on each question indicating if the bot should require 2 cards to be played or not
-# TODO: submissions should fill in the blanks when being read out if a question has blanks
-
-# Update this for your own system
+# CONFIG
 QUESTIONS_PATH = 'scripts/questions.json'
 ANSWERS_PATH = 'scripts/answers.json'
+MIN_PLAYERS = 1
+MAX_HAND_SIZE = 10
 
 # Load cards
 fs = require 'fs'
@@ -78,12 +77,8 @@ class Game
   
     # Prepare
     @players = []
-    @playersToSubmit = []
-    @minPlayers = 1
-    @maxHand = 10
-    @submissions = []
-    @randomizedSubmissions = []
-    @currentAnswer = 0
+    @minPlayers = MIN_PLAYERS
+    @maxHand = MAX_HAND_SIZE
     @isSubmissionPeriod = no
     @isVotingPeriod = no
     @roundNumber = 0
@@ -91,8 +86,6 @@ class Game
     @readMode = @ReadModes.BOT_READS
     @voteMode = @VoteModes.CZAR_VOTES
     @czarIndex = 0
-    @czar = 0
-    # TODO: any referencing issues with assigning myArray2 = myArray1 and then modifying/deleting myArray1?
 
     # Class-specific named messages
     @INFO_TOO_FEW_PLAYERS = "Not enough players. Need a total of " + @minPlayers + " players to start."
@@ -111,8 +104,8 @@ class Game
     
     # Ready
     say(@channel, INFO_WELCOME)
-    console.log "Total question cards: " + @questionDeck.length
-    console.log "Total answer cards: " + @answerDeck.length
+    say(@channel, "Total question cards: " + @questionDeck.length)
+    say(@channel, "Total answer cards: " + @answerDeck.length)
     
     
   joinPlayer: (msg) ->
@@ -294,7 +287,7 @@ class Game
     scoreMessage = "Scores:"
     for player in @players
       scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
-      
+
     # strip trailing comma
     scoreMessage = scoreMessage[0..scoreMessage.length-2]
     @channel.send scoreMessage
@@ -373,7 +366,7 @@ module.exports = (robot) =>
       if gameExists and g
         g.showScore()
     else if command is Commands.INFO
-      if gameExists and g
+      if gameStarted and g
         g.gameInfo()
     else if command is Commands.HELP
       showHelp(msg)
