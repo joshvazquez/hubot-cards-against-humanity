@@ -14,7 +14,7 @@ Copy the .coffee file into your hubot scripts directory. NPM package coming soon
 
 ### Notes
 
-This version does not support 2-card questions or draw-2-play-3 questions. Support for that is first on the list.
+None
 
 ### License
 
