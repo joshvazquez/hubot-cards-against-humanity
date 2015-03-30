@@ -203,7 +203,7 @@ class Game
           return
 
         # remove cards from hand from largest index to smallest to not disrupt order while removing
-        cardIndexes.sort()
+        cardIndexes.sort((a, b) -> a - b)
         cardIndexes.reverse()
         for i in cardIndexes
           player.hand.splice(i, 1)[0]
