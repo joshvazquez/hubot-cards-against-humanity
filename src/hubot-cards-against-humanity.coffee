@@ -45,6 +45,7 @@ INFO_DUPLICATE_PLAYER = "Player is already in the list."
 INFO_GAME_STARTED = "Game started! Sending hands via private message."
 INFO_HOW_TO_SUBMIT = "Submit your answer by sending me a private message containing your card number from 1-10. Example: \"submit 3\". If a question requires multiple cards to be submitted, submit like this: \"submit 3 4 5\"."
 INFO_ALL_PLAYERS_SUBMITTED = "All players have submitted their cards! Submissions are in random order."
+INFO_TOO_FEW_PLAYERS = "Not enough players. Need a total of " + MIN_PLAYERS + " players to start."
 
 Commands = 
   GAME_NEW : 0
@@ -87,10 +88,15 @@ class Game
     @voteMode = @VoteModes.CZAR_VOTES
     @czarIndex = -1
 
-    # Class-specific named messages
-    @INFO_TOO_FEW_PLAYERS = "Not enough players. Need a total of " + @minPlayers + " players to start."
+    @buildCards()
 
-    # Build cards
+    # Ready
+    say(@channel, INFO_WELCOME)
+    say(@channel, "Total question cards: " + @questionDeck.length)
+    say(@channel, "Total answer cards: " + @answerDeck.length)
+
+
+  buildCards: ->
     @questionDeck = []
     for i in [0..questions.length-1]
       @questionDeck[i] = new Card(questions[i])
@@ -102,12 +108,7 @@ class Game
     @discardQuestions = []
     @discardAnswers = []
     
-    # Ready
-    say(@channel, INFO_WELCOME)
-    say(@channel, "Total question cards: " + @questionDeck.length)
-    say(@channel, "Total answer cards: " + @answerDeck.length)
-    
-    
+
   joinPlayer: (msg) ->
     found = no
     for player in @players
@@ -129,7 +130,7 @@ class Game
     
   startGame: ->
     if @players.length < @minPlayers
-      say(@channel, @INFO_TOO_FEW_PLAYERS)
+      say(@channel, INFO_TOO_FEW_PLAYERS)
     else
       say(@channel, INFO_GAME_STARTED)
       say(@channel, INFO_HOW_TO_SUBMIT)
@@ -285,10 +286,9 @@ class Game
   startVoting: ->
     if @voteMode is @VoteModes.CHANNEL_VOTES
       # TODO: not implemented. Should this mode be available?
-      @channel.send "Voting time! Type \"!card vote #\" where # is the number prefixing the submission you want to vote for."
+      @channel.send "Voting time! Type \"!card vote #\" where # is the submission number you want to vote for."
     else if @voteMode is @VoteModes.CZAR_VOTES
-      @channel.send "The czar " + @czar.name + " is now voting."
-      @robot.send({user: {name: @czar.name}}, "Voting time! Type \"vote #\" where # is the number prefixing the submission you want to vote for (numbers in the channel).")
+      @channel.send @czar.name + ": Voting time! Type \"hubot vote #\" where # is the submission number you want to vote for."
 
 
   submitVote: (msg) ->
@@ -364,6 +364,8 @@ class Game
     scoreMessage = "Scores:"
     for player in @players
       scoreMessage += " " + player.name + " " + player.score + ","
+    # strip trailing comma
+    scoreMessage = scoreMessage[0..scoreMessage.length-2]
     console.log scoreMessage
 
 
@@ -401,6 +403,14 @@ class Card
     
 
 module.exports = (robot) =>
+  robot.hear /!submit\s(\d+)[^\d*]?(\d+)?[^\d*]?(\d+)?/i, (msg) -> # responds to 1, 2, or 3 submissions
+    if gameExists and g and g.isSubmissionPeriod
+      g.submitCard(msg)
+
+  robot.hear /!vote\s(\d+)/i, (msg) ->
+    if gameExists and g and g.isVotingPeriod
+      g.submitVote(msg)
+
   robot.hear /(.*)/i, (msg) ->
     command = getCommand(msg.match[1])
     if command is Commands.GAME_NEW
