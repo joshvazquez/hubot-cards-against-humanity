@@ -294,6 +294,9 @@ class Game
     scoreMessage = "Scores:"
     for player in @players
       scoreMessage = scoreMessage + " " + player.name + " " + player.score + ","
+      
+    # strip trailing comma
+    scoreMessage = scoreMessage[0..scoreMessage.length-2]
     @channel.send scoreMessage
 
 
