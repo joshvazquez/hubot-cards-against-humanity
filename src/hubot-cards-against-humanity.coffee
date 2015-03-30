@@ -90,7 +90,6 @@ class Game
     @lastQuestion = 0
     @readMode = @ReadModes.BOT_READS
     @voteMode = @VoteModes.CZAR_VOTES
-    @czarOrder = []
     @czarIndex = 0
     @czar = 0
     # TODO: any referencing issues with assigning myArray2 = myArray1 and then modifying/deleting myArray1?
@@ -271,12 +270,7 @@ class Game
 
 
   chooseCzar: ->
-    if @czarOrder.length is 0
-      for player in @players
-        # join order determines czar order
-        @czarOrder.push player
-
-    czar = @czarOrder[@czarIndex % @czarOrder.length]
+    czar = @players[@czarIndex % @players.length]
     @czarIndex++
     return czar
 
@@ -307,9 +301,7 @@ class Game
     # show current czar, current round, questions in deck, answers in deck, player count
     console.log "Current round: " + @roundNumber
     console.log "Czar: " + @czar.name
-    console.log "Czar order: " + @czarOrder
     console.log "Czar index: " + @czarIndex
-    console.log "@czarOrder[0]: " + @czarOrder[0]
     console.log "Question cards remaining: " + @questionDeck.length
     console.log "Answer cards remaining: " + @answerDeck.length
     scoreMessage = "Scores:"
