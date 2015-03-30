@@ -52,8 +52,9 @@ Commands =
   GAME_START : 2
   GAME_SCORE : 3
   GAME_END : 4
-  INFO : 5
-  HELP : 6
+  PLAYER_HAND : 5
+  INFO : 6
+  HELP : 7
 
 g = 0
 gameExists = no # need this or can just check `if g`, `if !g`?
@@ -84,7 +85,7 @@ class Game
     @roundNumber = 0
     @readMode = @ReadModes.BOT_READS
     @voteMode = @VoteModes.CZAR_VOTES
-    @czarIndex = 0
+    @czarIndex = -1
 
     # Class-specific named messages
     @INFO_TOO_FEW_PLAYERS = "Not enough players. Need a total of " + @minPlayers + " players to start."
@@ -323,8 +324,8 @@ class Game
 
 
   chooseCzar: ->
-    czar = @players[@czarIndex % @players.length]
     @czarIndex++
+    czar = @players[@czarIndex % @players.length]
     return czar
 
 
@@ -401,7 +402,7 @@ class Card
 
 module.exports = (robot) =>
   robot.hear /(.*)/i, (msg) ->
-    command = getCommand(msg)
+    command = getCommand(msg.match[1])
     if command is Commands.GAME_NEW
       unless gameExists
         g = new Game(msg, robot)
@@ -428,6 +429,12 @@ module.exports = (robot) =>
     else if command is Commands.INFO
       if gameStarted and g
         g.gameInfo()
+    else if command is Commands.PLAYER_HAND
+      if gameStarted and g
+        for player in g.players
+          if msg.message.user.name is player.name
+            g.sendHand(player)
+            break
     else if command is Commands.HELP
       showHelp(msg)
     else if command is Commands.GAME_END
@@ -470,18 +477,20 @@ say = (msg, text) ->
   msg.send text
 
 
-getCommand = (msg) ->
-  if msg.match[1] is "!card game"
+getCommand = (c) ->
+  if c is "!card game"
     Commands.GAME_NEW
-  else if msg.match[1] is "!card join"
+  else if c is "!card join"
     Commands.GAME_JOIN
-  else if msg.match[1] is "!card start"
+  else if c is "!card start"
     Commands.GAME_START
-  else if msg.match[1] is "!card score"
+  else if c is "!card score"
     Commands.GAME_SCORE
-  else if msg.match[1] is "!card end"
+  else if c is "!card hand"
+    Commands.PLAYER_HAND
+  else if c is "!card end"
     Commands.GAME_END
-  else if msg.match[1] is "!card info"
+  else if c is "!card info"
     Commands.INFO
-  else if msg.match[1] is "!card help"
+  else if c is "!card help"
     Commands.HELP
